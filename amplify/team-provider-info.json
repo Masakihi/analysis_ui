@@ -15,6 +15,9 @@
     "categories": {
       "auth": {
         "amplifyapp": {}
+      },
+      "function": {
+        "AnalysisApiFunction": {}
       }
     }
   }

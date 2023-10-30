@@ -1,5 +1,20 @@
 {
-  "api": {},
+  "api": {
+    "AnalysisApi": {
+      "dependsOn": [
+        {
+          "attributes": [
+            "Name",
+            "Arn"
+          ],
+          "category": "function",
+          "resourceName": "AnalysisApiFunction"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "API Gateway"
+    }
+  },
   "auth": {
     "amplifyapp": {
       "dependsOn": [],
@@ -26,5 +41,11 @@
       "serviceType": "managed"
     }
   },
-  "function": {}
+  "function": {
+    "AnalysisApiFunction": {
+      "build": true,
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    }
+  }
 }
