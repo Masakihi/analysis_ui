@@ -42,12 +42,6 @@
     }
   },
   "function": {
-    "AnalysisApiFunction": {
-      "build": true,
-      "dependsOn": [],
-      "providerPlugin": "awscloudformation",
-      "service": "Lambda"
-    },
     "AnalysisFunction": {
       "build": true,
       "providerPlugin": "awscloudformation",
