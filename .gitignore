@@ -45,4 +45,6 @@ amplifytools.xcconfig
 #amplify-do-not-edit-end
 
 # custom
-amplify/backend/function/AnalysisFunction/venv/
+venv/
+hoge
+.history
