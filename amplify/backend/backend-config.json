@@ -26,11 +26,5 @@
       "serviceType": "managed"
     }
   },
-  "function": {
-    "AnalysisFunction": {
-      "build": true,
-      "providerPlugin": "awscloudformation",
-      "service": "Lambda"
-    }
-  }
+  "function": {}
 }

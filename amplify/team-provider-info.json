@@ -13,9 +13,6 @@
       "APIGatewayAuthURL": "https://s3.amazonaws.com/amplify-amplifyapp-dev-215400-deployment/amplify-cfn-templates/api/APIGatewayAuthStack.json"
     },
     "categories": {
-      "function": {
-        "AnalysisFunction": {}
-      },
       "auth": {
         "amplifyapp": {}
       }
