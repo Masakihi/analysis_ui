@@ -18,13 +18,6 @@ export type AmplifyDependentResourcesAttributes = {
     }
   },
   "function": {
-    "AnalysisApiFunction": {
-      "Arn": "string",
-      "LambdaExecutionRole": "string",
-      "LambdaExecutionRoleArn": "string",
-      "Name": "string",
-      "Region": "string"
-    },
     "AnalysisFunction": {
       "Arn": "string",
       "LambdaExecutionRole": "string",
