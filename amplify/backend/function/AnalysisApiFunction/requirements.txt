@@ -1,9 +1,0 @@
-fastapi
-uvicorn
-mangum
-numba
-numpy
-matplotlib
-fabio
-scipy
-python-multipart

@@ -19,7 +19,7 @@
       "function": {
         "AnalysisApiFunction": {
           "deploymentBucketName": "amplify-amplifyapp-dev-215400-deployment",
-          "s3Key": "amplify-builds/AnalysisApiFunction-74433474695336515836-build.zip"
+          "s3Key": "amplify-builds/AnalysisApiFunction-467a6c69776a5449366e-build.zip"
         }
       },
       "api": {
