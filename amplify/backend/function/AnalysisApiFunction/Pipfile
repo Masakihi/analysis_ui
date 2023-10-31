@@ -7,6 +7,15 @@ verify_ssl = true
 
 [packages]
 src = {editable = true, path = "./src"}
+fastapi = "*"
+uvicorn = "*"
+mangum = "*"
+numba = "*"
+numpy = "*"
+matplotlib = "*"
+fabio = "*"
+scipy = "*"
+python-multipart = "*"
 
 [requires]
 python_version = "3.8"
