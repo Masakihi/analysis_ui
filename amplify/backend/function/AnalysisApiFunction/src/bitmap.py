@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 import base64
 import math
-from models.bitmap_util import scan_horizontal, scan_vertical, scan_circular, scan_sector, get_center, find_peaks
+from bitmap_util import scan_horizontal, scan_vertical, scan_circular, scan_sector, get_center, find_peaks
 
 
 class Bitmap:

@@ -130,7 +130,7 @@ def scan_circular(img, x_c, y_c):
 #                 return y - yc < math.tan(math.radians(angles[0]))*(x - xc) or y - yc > math.tan(math.radians(angles[1]))*(x - xc)
 
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def scan_sector(img, xc, yc, angles_list):
     print(angles_list)
     y_max, x_max = img.shape

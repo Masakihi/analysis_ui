@@ -1,6 +1,6 @@
 from fastapi import APIRouter, File, UploadFile, Form
-from schemas.image import TifImageSchema, BitmapSchema, ImageDataSchema, CenterSchema, CalibrationResponseSchema, ScanCircularResponseSchema, ScanSectorResponseSchema, ScanHorizontalResponseSchema, ScanVerticalResponseSchema
-from models.bitmap import Bitmap
+from image_schema import TifImageSchema, BitmapSchema, ImageDataSchema, CenterSchema, CalibrationResponseSchema, ScanCircularResponseSchema, ScanSectorResponseSchema, ScanHorizontalResponseSchema, ScanVerticalResponseSchema
+from bitmap import Bitmap
 import logging
 from typing import List, Tuple
 
@@ -100,3 +100,6 @@ async def scan_vertical(tif: UploadFile, vmin: str = Form(...), vmax: str = Form
     image_data = bitmap.image(vmin=int(vmin), vmax=int(vmax), center=[
                               int(x_c), int(y_c)], x_list=x_list, y_list=y_list)
     return ScanVerticalResponseSchema(I_list=I_list, image_data=image_data)
+
+
+routes = router.routes
