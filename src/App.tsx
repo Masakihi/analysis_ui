@@ -32,11 +32,12 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { withStyles } from '@mui/styles';
 import './App.css';
-import { setTokenSourceMapRange } from 'typescript';
-import { Url } from './constant';
-import Chart from 'chart.js/auto';
-import * as d3 from 'd3';
+import { Url, AWSAccessKey, AWSSecretAccessKey, S3BucketName, RegionName } from './constant';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+
+import { Credentials } from 'aws-sdk';
+import { Upload } from '@aws-sdk/lib-storage';
+import { S3Client } from '@aws-sdk/client-s3';
 
 function formatNumberInExponential(num: number, precision: number): string {
   const exponential = num.toExponential(precision);
@@ -49,6 +50,33 @@ function formatNumberInExponential(num: number, precision: number): string {
   });
   exponentSuperscript = exponentSuperscript.replace(/-/g, '⁻');
   return `${base}×10${exponentSuperscript}`;
+}
+
+function binaryToBase64(binaryData: ArrayBuffer) {
+  const binaryArray = new Uint8Array(binaryData);
+  let base64Data = '';
+  for (let i = 0; i < binaryArray.length; i++) {
+    base64Data += String.fromCharCode(binaryArray[i]);
+  }
+  return btoa(base64Data);
+}
+
+function fileToBinary(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = function (event) {
+      const binaryData = event.target?.result as ArrayBuffer;
+      resolve(binaryData);
+    };
+
+    reader.onerror = function (error) {
+      console.error('ファイルの読み込み中にエラーが発生しました: ' + error);
+      reject(error);
+    };
+
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 interface GraphDataPoint {
@@ -169,7 +197,7 @@ const App: React.FC = () => {
   const [sectorGraphDatasets, setSectorGraphDatasets] = useState<GraphDataPoint[]>();
   const [sectorImageData, setSectorImageData] = useState<string>();
   const [angleRangeList, setAngleRangeList] = useState<Data[]>([{ min: 0, max: 0 }]);
-  const [angleRangeListString, setAngleRangeListString] = useState<string>();
+  const [angleRangeListData, setAngleRangeListData] = useState<number[][]>();
   const [horizontalIList, setHorizontalIList] = useState<number[]>();
   const [horizontalGraphDatasets, setHorizontalGraphDatasets] = useState<GraphDataPoint[]>();
   const [horizontalImageData, setHorizontalImageData] = useState<string>();
@@ -178,6 +206,39 @@ const App: React.FC = () => {
   const [verticalImageData, setVerticalImageData] = useState<string>();
 
   let tooltipTimer: NodeJS.Timeout | undefined;
+
+  async function handleTestApi() {
+    if (selectedStandardFile) {
+      const binaryData = await fileToBinary(selectedStandardFile);
+      let base64Data = binaryToBase64(binaryData);
+      const requestBody = {
+        tif: base64Data,
+      };
+      // console.log(base64Data);
+      console.log(JSON.stringify(requestBody).length);
+      fetch(`${Url}test_1`, {
+        method: 'POST',
+        // mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+        .then((response) => {
+          console.log(response);
+          return response.json();
+        })
+        .then((data) => {
+          if (data.body) {
+            return JSON.parse(data.body);
+          }
+          return data;
+        })
+        .then((data) => {
+          setStandardImageData(data.image_data);
+        });
+    }
+  }
 
   const handleOpen = () => {
     setOpen(true);
@@ -191,7 +252,7 @@ const App: React.FC = () => {
     setShowInfo(null);
   };
 
-  const getImage = (imageType: 'standard' | 'background' | 'sample') => {
+  async function getImage(imageType: 'standard' | 'background' | 'sample') {
     let selectedFile: File | undefined = selectedStandardFile;
     let rangeForm: number[] = standardImageRangeForm;
     let setImageData: (imageData: string) => void = setStandardImageData;
@@ -213,20 +274,53 @@ const App: React.FC = () => {
         break;
     }
     if (selectedFile) {
-      console.log('imageを取得します');
-      const formData = new FormData();
-      formData.append('tif', selectedFile);
-      formData.append('vmin', String(Math.floor(10 ** rangeForm[0])));
-      formData.append('vmax', String(Math.floor(10 ** rangeForm[1])));
-      if (centerFlg) {
-        formData.append('x_c', String(centerX));
-        formData.append('y_c', String(centerY));
+      const creds = new Credentials(AWSAccessKey, AWSSecretAccessKey);
+      if (selectedFile === undefined) {
+        return;
       }
+      try {
+        // S3へのアップロード
+        console.log('imageをアップロードします');
+        const parallelUploadS3 = new Upload({
+          client: new S3Client({ region: RegionName, credentials: creds }),
+          params: { Bucket: S3BucketName, Key: selectedFile.name, Body: selectedFile },
+          leavePartsOnError: false,
+        });
+
+        parallelUploadS3.on('httpUploadProgress', (progress) => {
+          console.log(progress);
+        });
+
+        await parallelUploadS3.done();
+        console.log('アップロードが正常に完了しました');
+      } catch (e) {
+        console.log(e);
+      }
+      console.log('imageを取得します');
+      const requestBody = {
+        file_key: selectedFile.name,
+        vmin: Math.floor(10 ** rangeForm[0]),
+        vmax: Math.floor(10 ** rangeForm[1]),
+        x_c: centerFlg ? centerX : undefined,
+        y_c: centerFlg ? centerY : undefined,
+      };
       fetch(`${Url}image/get_image`, {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
       })
-        .then((response) => response.json())
+        .then((response) => {
+          console.log(response);
+          return response.json();
+        })
+        .then((data) => {
+          if (data.body) {
+            return JSON.parse(data.body);
+          }
+          return data;
+        })
         .then((data) => {
           const base64ImageData: string = data.image_data;
           setImageData(base64ImageData);
@@ -243,27 +337,56 @@ const App: React.FC = () => {
       // setShowInfo(`${imageType}ファイルが入力されていません`);
       // setOpen(true);
     }
-  };
+  }
 
-  const getCenterAuto = () => {
+  async function getCenterAuto() {
     if (selectedStandardFile === undefined) {
       setShowInfo('standardファイルを入力してください');
       handleOpen();
       return;
     }
+    try {
+      // S3へのアップロード
+      console.log('imageをアップロードします');
+      const creds = new Credentials(AWSAccessKey, AWSSecretAccessKey);
+      const parallelUploadS3 = new Upload({
+        client: new S3Client({ region: RegionName, credentials: creds }),
+        params: { Bucket: S3BucketName, Key: selectedStandardFile.name, Body: selectedStandardFile },
+        leavePartsOnError: false,
+      });
+
+      parallelUploadS3.on('httpUploadProgress', (progress) => {
+        console.log(progress);
+      });
+
+      await parallelUploadS3.done();
+      console.log('アップロードが正常に完了しました');
+    } catch (e) {
+      console.log(e);
+    }
     if (selectedStandardFile) {
       setLoadingGetCenterAuto(true);
       // console.log('fileを送信します');
-      const formData = new FormData();
-      formData.append('tif', selectedStandardFile);
-      formData.forEach((value, key) => {
-        console.log(`${key}: ${value}`);
-      });
+      const requestBody = {
+        file_key: selectedStandardFile.name,
+      };
       fetch(`${Url}image/get_center_auto`, {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
       })
-        .then((response) => response.json())
+        .then((response) => {
+          console.log(response);
+          return response.json();
+        })
+        .then((data) => {
+          if (data.body) {
+            return JSON.parse(data.body);
+          }
+          return data;
+        })
         .then((data) => {
           setCenterX(data.x_c);
           setCenterY(data.y_c);
@@ -278,9 +401,9 @@ const App: React.FC = () => {
           setLoadingGetCenterAuto(false);
         });
     }
-  };
+  }
 
-  const handleCalibration = () => {
+  async function handleCalibration() {
     if (selectedStandardFile === undefined) {
       setShowInfo('standardファイルを入力してください');
       handleOpen();
@@ -294,15 +417,28 @@ const App: React.FC = () => {
       return;
     }
     setLoadingCalibration(true);
-    const formData = new FormData();
-    formData.append('tif', selectedStandardFile);
-    formData.append('x_c', String(centerX));
-    formData.append('y_c', String(centerY));
+    const requestBody = {
+      file_key: selectedStandardFile.name,
+      x_c: centerX,
+      y_c: centerY,
+    };
     fetch(`${Url}image/calibration`, {
       method: 'POST',
-      body: formData,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
     })
-      .then((response) => response.json())
+      .then((response) => {
+        console.log(response);
+        return response.json();
+      })
+      .then((data) => {
+        if (data.body) {
+          return JSON.parse(data.body);
+        }
+        return data;
+      })
       .then((data) => {
         setQList(data.q_list);
         console.log(data.q_list);
@@ -316,9 +452,9 @@ const App: React.FC = () => {
       .finally(() => {
         setLoadingCalibration(false);
       });
-  };
+  }
 
-  const handleCorrection = () => {
+  async function handleCorrection() {
     if (selectedBackgroundFile === undefined || selectedSampleFile === undefined) {
       setShowInfo('backgroundファイルとsampleファイルを両方入れてください');
       setOpen(true);
@@ -330,20 +466,31 @@ const App: React.FC = () => {
       return;
     }
     console.log('imageを取得します');
-    const formData = new FormData();
-    formData.append('tif', selectedSampleFile);
-    formData.append('vmin', String(Math.floor(10 ** sampleImageRangeForm[0])));
-    formData.append('vmax', String(Math.floor(10 ** sampleImageRangeForm[1])));
-    formData.append('tif_background', selectedBackgroundFile);
-    if (centerFlg) {
-      formData.append('x_c', String(centerX));
-      formData.append('y_c', String(centerY));
-    }
+    const requestBody = {
+      file_key: selectedSampleFile.name,
+      vmin: Math.floor(10 ** sampleImageRangeForm[0]),
+      vmax: Math.floor(10 ** sampleImageRangeForm[1]),
+      file_key_background: selectedBackgroundFile.name,
+      x_c: centerFlg ? centerX : undefined,
+      y_c: centerFlg ? centerY : undefined,
+    };
     fetch(`${Url}image/get_image`, {
       method: 'POST',
-      body: formData,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
     })
-      .then((response) => response.json())
+      .then((response) => {
+        console.log(response);
+        return response.json();
+      })
+      .then((data) => {
+        if (data.body) {
+          return JSON.parse(data.body);
+        }
+        return data;
+      })
       .then((data) => {
         const base64ImageData: string = data.image_data;
         setSampleImageData(base64ImageData);
@@ -354,7 +501,7 @@ const App: React.FC = () => {
       .catch((error) => {
         console.error(error);
       });
-  };
+  }
 
   const handleDownloadCalibratonResult = () => {
     if (qList) {
@@ -369,27 +516,44 @@ const App: React.FC = () => {
     }
   };
 
-  const handleScanCircular = () => {
+  async function handleScanCircular() {
     if (selectedSampleFile === undefined) {
       setShowInfo('sampleファイルを入れてください');
+      setOpen(true);
+      setCenterFlg(true);
+      return;
+    }
+    if (!centerFlg) {
+      setShowInfo('中心決めを行ってください');
       setOpen(true);
       return;
     }
     console.log('円環平均をとります');
-    const formData = new FormData();
-    formData.append('tif', selectedSampleFile);
-    formData.append('vmin', String(Math.floor(10 ** sampleImageRangeForm[0])));
-    formData.append('vmax', String(Math.floor(10 ** sampleImageRangeForm[1])));
-    if (selectedBackgroundFile) {
-      formData.append('tif_background', selectedBackgroundFile);
-    }
-    formData.append('x_c', String(centerX));
-    formData.append('y_c', String(centerY));
+    const requestBody = {
+      file_key: selectedSampleFile.name,
+      vmin: Math.floor(10 ** sampleImageRangeForm[0]),
+      vmax: Math.floor(10 ** sampleImageRangeForm[1]),
+      x_c: centerX,
+      y_c: centerY,
+      file_key_background: selectedBackgroundFile ? selectedBackgroundFile.name : undefined,
+    };
     fetch(`${Url}image/scan_circular`, {
       method: 'POST',
-      body: formData,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
     })
-      .then((response) => response.json())
+      .then((response) => {
+        console.log(response);
+        return response.json();
+      })
+      .then((data) => {
+        if (data.body) {
+          return JSON.parse(data.body);
+        }
+        return data;
+      })
       .then((data) => {
         const iListTmp: number[] = data.I_list;
         setCircularIList(iListTmp);
@@ -402,35 +566,53 @@ const App: React.FC = () => {
       .catch((error) => {
         console.error(error);
       });
-  };
+  }
 
-  const handleScanSector = () => {
+  async function handleScanSector() {
     if (selectedSampleFile === undefined) {
       setShowInfo('sampleファイルを入れてください');
+      setOpen(true);
+      setCenterFlg(true);
+      return;
+    }
+    if (!centerFlg) {
+      setShowInfo('中心決めを行ってください');
       setOpen(true);
       return;
     }
     console.log('セクター平均をとります');
-    const formData = new FormData();
-    formData.append('tif', selectedSampleFile);
-    formData.append('vmin', String(Math.floor(10 ** sampleImageRangeForm[0])));
-    formData.append('vmax', String(Math.floor(10 ** sampleImageRangeForm[1])));
-    if (selectedBackgroundFile) {
-      formData.append('tif_background', selectedBackgroundFile);
-    }
-    formData.append('x_c', String(centerX));
-    formData.append('y_c', String(centerY));
-    if (angleRangeListString === undefined) {
+    if (angleRangeListData === undefined) {
       setShowInfo('角度が入力されていません');
       setOpen(true);
       return;
     }
-    formData.append('angle_range_list', angleRangeListString);
+    const requestBody = {
+      file_key: selectedSampleFile.name,
+      vmin: Math.floor(10 ** sampleImageRangeForm[0]),
+      vmax: Math.floor(10 ** sampleImageRangeForm[1]),
+      x_c: centerX,
+      y_c: centerY,
+      file_key_background: selectedBackgroundFile ? selectedBackgroundFile.name : undefined,
+      angle_range_list: angleRangeListData,
+    };
+    console.log(requestBody);
     fetch(`${Url}image/scan_sector`, {
       method: 'POST',
-      body: formData,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
     })
-      .then((response) => response.json())
+      .then((response) => {
+        console.log(response);
+        return response.json();
+      })
+      .then((data) => {
+        if (data.body) {
+          return JSON.parse(data.body);
+        }
+        return data;
+      })
       .then((data) => {
         const iListTmp: number[] = data.I_list;
         setSectorIList(iListTmp);
@@ -442,7 +624,7 @@ const App: React.FC = () => {
       .catch((error) => {
         console.error(error);
       });
-  };
+  }
 
   const handleScanHorizontal = () => {
     if (selectedSampleFile === undefined) {
@@ -450,21 +632,38 @@ const App: React.FC = () => {
       setOpen(true);
       return;
     }
-    console.log('水平スキャンをとります');
-    const formData = new FormData();
-    formData.append('tif', selectedSampleFile);
-    formData.append('vmin', String(Math.floor(10 ** sampleImageRangeForm[0])));
-    formData.append('vmax', String(Math.floor(10 ** sampleImageRangeForm[1])));
-    if (selectedBackgroundFile) {
-      formData.append('tif_background', selectedBackgroundFile);
+    if (!centerFlg) {
+      setShowInfo('適当に中心を入力してください');
+      setCenterFlg(true);
+      setOpen(true);
+      return;
     }
-    formData.append('x_c', String(centerX));
-    formData.append('y_c', String(centerY));
+    console.log('水平スキャンをとります');
+    const requestBody = {
+      file_key: selectedSampleFile.name,
+      vmin: Math.floor(10 ** sampleImageRangeForm[0]),
+      vmax: Math.floor(10 ** sampleImageRangeForm[1]),
+      x_c: centerFlg ? centerX : undefined,
+      y_c: centerFlg ? centerY : undefined,
+      file_key_background: selectedBackgroundFile ? selectedBackgroundFile.name : undefined,
+    };
     fetch(`${Url}image/scan_horizontal`, {
       method: 'POST',
-      body: formData,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
     })
-      .then((response) => response.json())
+      .then((response) => {
+        console.log(response);
+        return response.json();
+      })
+      .then((data) => {
+        if (data.body) {
+          return JSON.parse(data.body);
+        }
+        return data;
+      })
       .then((data) => {
         const iListTmp: number[] = data.I_list;
         setHorizontalIList(iListTmp);
@@ -484,21 +683,38 @@ const App: React.FC = () => {
       setOpen(true);
       return;
     }
-    console.log('垂直スキャンをとります');
-    const formData = new FormData();
-    formData.append('tif', selectedSampleFile);
-    formData.append('vmin', String(Math.floor(10 ** sampleImageRangeForm[0])));
-    formData.append('vmax', String(Math.floor(10 ** sampleImageRangeForm[1])));
-    if (selectedBackgroundFile) {
-      formData.append('tif_background', selectedBackgroundFile);
+    if (!centerFlg) {
+      setShowInfo('適当に中心を入力してください');
+      setCenterFlg(true);
+      setOpen(true);
+      return;
     }
-    formData.append('x_c', String(centerX));
-    formData.append('y_c', String(centerY));
+    console.log('垂直スキャンをとります');
+    const requestBody = {
+      file_key: selectedSampleFile.name,
+      vmin: Math.floor(10 ** sampleImageRangeForm[0]),
+      vmax: Math.floor(10 ** sampleImageRangeForm[1]),
+      x_c: centerX,
+      y_c: centerY,
+      file_key_background: selectedBackgroundFile ? selectedBackgroundFile.name : undefined,
+    };
     fetch(`${Url}image/scan_vertical`, {
       method: 'POST',
-      body: formData,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
     })
-      .then((response) => response.json())
+      .then((response) => {
+        console.log(response);
+        return response.json();
+      })
+      .then((data) => {
+        if (data.body) {
+          return JSON.parse(data.body);
+        }
+        return data;
+      })
       .then((data) => {
         const iListTmp: number[] = data.I_list;
         setVerticalIList(iListTmp);
@@ -509,6 +725,57 @@ const App: React.FC = () => {
       })
       .catch((error) => {
         console.error(error);
+      });
+  };
+
+  const handleTestS3Upload = async () => {
+    const creds = new Credentials(AWSAccessKey, AWSSecretAccessKey);
+    if (selectedBackgroundFile === undefined) {
+      return;
+    }
+    try {
+      // S3へのアップロード
+      const parallelUploadS3 = new Upload({
+        client: new S3Client({ region: RegionName, credentials: creds }),
+        params: { Bucket: S3BucketName, Key: selectedBackgroundFile.name, Body: selectedBackgroundFile },
+        leavePartsOnError: false,
+      });
+
+      parallelUploadS3.on('httpUploadProgress', (progress) => {
+        console.log(progress);
+      });
+
+      await parallelUploadS3.done();
+      console.log('完了しましたよん');
+    } catch (e) {
+      console.log(e);
+    }
+    const requestBody = {
+      file_key: selectedBackgroundFile.name,
+    };
+    fetch(`${Url}image/test_boto3`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    })
+      .then((response) => {
+        console.log(response);
+        return response.json();
+      })
+      .then((data) => {
+        if (data.body) {
+          return JSON.parse(data.body);
+        }
+        return data;
+      })
+      .then((data) => {
+        setStandardImageData(data.image_data);
+      })
+      .catch((error) => {
+        console.error(error);
+        setShowInfo(`エラー：${error}`);
       });
   };
 
@@ -561,7 +828,7 @@ const App: React.FC = () => {
   }, [verticalIList]);
 
   useEffect(() => {
-    setAngleRangeListString(JSON.stringify(angleRangeList.map(({ min, max }) => [min, max])));
+    setAngleRangeListData(angleRangeList.map(({ min, max }) => [min, max]));
     console.log(JSON.stringify(angleRangeList.map(({ min, max }) => [min, max])));
   }, [angleRangeList]);
 
@@ -1076,7 +1343,7 @@ const App: React.FC = () => {
                 </Grid>
                 <Grid item xs={6} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Box display="flex" alignItems="center" justifyContent="center" sx={{ minHeight: 800, width: 400 }}>
-                    {qList !== undefined && circularIList !== undefined ? (
+                    {qList !== undefined && sectorIList !== undefined ? (
                       <div>
                         <LineChart width={500} height={600} data={sectorGraphDatasets}>
                           <CartesianGrid strokeDasharray="3 3" />{' '}
@@ -1093,8 +1360,8 @@ const App: React.FC = () => {
                             dataKey="y"
                             type="number"
                             scale="log"
-                            domain={[1, 10000]}
-                            ticks={[1, 10, 100, 1000, 10000]}
+                            domain={[1, 100000]}
+                            ticks={[1, 10, 100, 1000, 10000, 100000]}
                             tick={{ fontSize: 12, fill: 'white' }}
                             tickFormatter={(value) => `${formatNumberInExponential(Number(value), 2)}`}
                           />
@@ -1133,7 +1400,7 @@ const App: React.FC = () => {
                             dataKey="y"
                             type="number"
                             scale="log"
-                            domain={[0.1, 100000]}
+                            domain={[0.1, 10000]}
                             tick={{ fontSize: 12, fill: 'white' }}
                             tickFormatter={(value) => `${formatNumberInExponential(Number(value), 2)}`} // 指数表示に変換
                           />

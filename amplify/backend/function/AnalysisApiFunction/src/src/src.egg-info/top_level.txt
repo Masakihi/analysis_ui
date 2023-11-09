@@ -1,5 +1,0 @@
-__init__
-bitmap
-bitmap_util
-image_router
-image_schema

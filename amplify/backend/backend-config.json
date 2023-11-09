@@ -1,20 +1,5 @@
 {
-  "api": {
-    "AnalysisApi": {
-      "dependsOn": [
-        {
-          "attributes": [
-            "Name",
-            "Arn"
-          ],
-          "category": "function",
-          "resourceName": "AnalysisApiFunction"
-        }
-      ],
-      "providerPlugin": "awscloudformation",
-      "service": "API Gateway"
-    }
-  },
+  "api": {},
   "auth": {
     "amplifyapp": {
       "dependsOn": [],

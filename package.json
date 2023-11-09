@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.445.0",
+    "@aws-sdk/lib-storage": "^3.445.0",
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.14.15",
@@ -15,6 +17,7 @@
     "@types/node": "^16.18.59",
     "@types/react": "^18.2.33",
     "@types/react-dom": "^18.2.14",
+    "aws-sdk": "^2.1490.0",
     "axios": "^1.6.0",
     "axis": "^1.0.0",
     "chart.js": "^4.4.0",

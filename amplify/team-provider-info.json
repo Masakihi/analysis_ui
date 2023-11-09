@@ -21,9 +21,6 @@
           "deploymentBucketName": "amplify-amplifyapp-dev-215400-deployment",
           "s3Key": "amplify-builds/AnalysisApiFunction-413463616d544e326834-build.zip"
         }
-      },
-      "api": {
-        "AnalysisApi": {}
       }
     }
   }
